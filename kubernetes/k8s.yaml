@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nfs-access
+  labels:
+    app: nfs-access
+spec:
+  ports:
+  - name: http
+    protocol: TCP
+    #port is loadbalancer port
+    port: 8500
+    # for clustering, port=targetPort
+    # adding clusterIP: none for setting up deep dns
+  clusterIP: None
+  selector:
+    role: nfs-server
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: ext-nfs
+    labels:
+      app: ext-nfs
+spec:
+  externalIPs:
+    - 172.16.155.188
+  ports:
+    - name: nfs
+      port: 2049
+    - name: mountd
+      port: 32767
+    - name: rpcbind
+      port: 111
+    - name: nolock
+      port: 34623
+    - name: nolock1
+      port: 37419
+  selector:
+    role: nfs-server
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: nfs-server
+spec:
+  ports:
+    - name: nfs
+      port: 2049
+    - name: mountd
+      port: 32767
+    - name: rpcbind
+      port: 111
+    - name: nolock
+      port: 34623
+    - name: nolock1
+      port: 37419
+  selector:
+    role: nfs-server
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: nfs-server
+spec:
+  replicas: 1
+  selector:
+    role: nfs-server
+  template:
+    metadata:
+      labels:
+        role: nfs-server
+    spec:
+      #nodeSelector:
+      #  external-storage: "true"
+      containers:
+      - name: nfs-server
+        #image: gcr.io/google_containers/volume-nfs:0.8
+        image: 172.16.155.136:5000/nfs:test
+        ports:
+          - name: nfs
+            containerPort: 2049
+          - name: mountd
+            containerPort: 32767
+          - name: rpcbind
+            containerPort: 111
+          - name: nolock
+            containerPort: 34623
+          - name: nolock1
+            containerPort: 37419
+        securityContext:
+          privileged: true
+          capabilities:
+             add:
+               - NET_ADMIN
+        volumeMounts:
+          #- mountPath: /exports
+          - mountPath: /srv/nfs
+            name: nfs-export-fast
+          - mountPath: /sys/fs/cgroup
+            name: systemd-mount
+      volumes:
+        - name: nfs-export-fast
+          hostPath:
+            path: /data/nfs
+        - name: systemd-mount
+          hostPath:
+            path: /sys/fs/cgroup
