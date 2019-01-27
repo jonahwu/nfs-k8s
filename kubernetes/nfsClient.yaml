@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: k8snfsmount
+spec:
+  serviceName: "k8snfsmount"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8snfsmount
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: k8snfsmount
+      annotations:
+        pod.alpha.kubernetes.io/initialized: "true"
+
+    spec:
+      # soft antiaffinity for optimize placement
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - k8snfsmount
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: k8snfsmount
+        #image: 192.168.51.130:5000/uwebserverv6
+        image: 172.16.155.136:5000/uwebserverv6
+        readinessProbe:
+          tcpSocket:
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        stdin: true
+        ports:
+          - containerPort: 8000
+        resources:
+          limits:
+            cpu: 1
+            memory: 512Mi
+          requests:
+            cpu: 1
+            memory: 512Mi
+
+        volumeMounts:
+        - mountPath: /etc/localtime
+          name: hosttime
+        - mountPath: /nfs
+          name: nfs-volume
+      restartPolicy: Always
+
+        #terminationGracePeriodSeconds: 10
+
+      volumes:
+       - name: hosttime
+         hostPath:
+           path: /etc/localtime 
+       - name: nfs-volume
+         nfs:
+           server: 172.16.155.166
+           path: /srv/nfs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8snfsmount
+  labels:
+    app: k8snfsmount
+spec:
+  ports:
+  - name: http
+    protocol: TCP
+    #port is loadbalancer port
+    port: 8001
+    # targetport is container port
+    targetPort: 8000
+  selector:
+    app: k8snfsmount
+
